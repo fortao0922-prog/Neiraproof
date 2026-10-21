@@ -1,8 +1,8 @@
 """
-neira_proof · Лаборатория Нейры — Telegram-бот воронки «ЛАБ».
+neira_proof · Telegram-бот Нейры: кодовые слова из постов → материалы.
 
 Как работает:
-  Instagram: человек пишет «ЛАБ» в комментарии → в директ приходит ссылка вида
+  Instagram: человек пишет кодовое слово поста (ФОТО, КАРТОЧКА…) в комментарии → в директ приходит ссылка вида
   https://t.me/<бот>?start=<код> → бот проверяет подписку на канал → отдаёт файл.
 
 Коды материалов (deep link) задаются в materials.json.
@@ -10,6 +10,7 @@ neira_proof · Лаборатория Нейры — Telegram-бот ворон�
 import asyncio
 import csv
 import json
+import re
 import logging
 import os
 from datetime import datetime, timezone
@@ -150,10 +151,35 @@ async def on_check(cb: CallbackQuery, bot: Bot):
         await cb.answer(TXT_NOT_YET, show_alert=True)
 
 
-@dp.message(F.text.lower().contains("лаб") | F.text.lower().contains("lab"))
+# Кодовые слова: у каждого поста своё слово, оно записано в materials.json → "keywords".
+LEGACY_WORDS = {"лаб", "lab"}  # старое общее слово: показываем меню со всеми материалами
+
+
+def words_of(text: str) -> list[str]:
+    t = text.lower().replace("ё", "е")
+    return re.findall(r"[a-zа-я0-9-]+", t)
+
+
+def find_code(text: str) -> str | None:
+    ws = words_of(text)
+    for code, m in MATERIALS.items():
+        keys = {k.lower().replace("ё", "е") for k in m.get("keywords", [])} | {code}
+        if any(w in keys for w in ws):
+            return code
+    return None
+
+
+@dp.message(F.text & ~F.text.startswith("/"), F.func(lambda m: find_code(m.text) is not None))
 async def on_keyword(msg: Message, bot: Bot):
-    log_event(msg.from_user, "keyword", DEFAULT_CODE)
-    await gate(bot, msg.chat.id, msg.from_user, DEFAULT_CODE)
+    code = find_code(msg.text)
+    log_event(msg.from_user, "keyword", code)
+    await gate(bot, msg.chat.id, msg.from_user, code)
+
+
+@dp.message(F.text & ~F.text.startswith("/"), F.func(lambda m: bool(set(words_of(m.text)) & LEGACY_WORDS)))
+async def on_legacy(msg: Message):
+    log_event(msg.from_user, "keyword", "menu")
+    await msg.answer(TXT_MENU, reply_markup=kb_menu())
 
 
 @dp.message(Command("stats"))
@@ -186,7 +212,7 @@ async def on_export(msg: Message):
 
 @dp.message()
 async def on_other(msg: Message):
-    await msg.answer("Я пока понимаю только кодовые слова 🙈 Напиши «ЛАБ» или открой /menu")
+    await msg.answer("Я понимаю кодовые слова из постов — например, «ФОТО» или «КАРТОЧКА» 🙂 Все материалы — в /menu")
 
 
 async def main():
