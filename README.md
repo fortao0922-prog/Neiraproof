@@ -1,4 +1,4 @@
-# Бот Лаборатории Нейры · @neiraproof_bot
+# Бот Нейры · @neiraproof_bot
 
 Воронка «ЛАБ»: ссылка `t.me/neiraproof_bot?start=<код>` → проверка подписки на канал → выдача PDF.
 
